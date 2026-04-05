@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Health Monitor</title>
+    <style>
+        body {
+            font-family: monospace;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 0 20px;
+            background: #0d0d0d;
+            color: #e0e0e0;
+        }
+        h1 { font-size: 1.4rem; margin-bottom: 5px; color: #ffffff; }
+        p.subtitle { color: #666; margin-bottom: 30px; font-size: 0.9rem; }
+
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-bottom: 30px;
+        }
+        .card {
+            background: #1a1a1a;
+            border: 1px solid #2a2a2a;
+            padding: 20px;
+            border-radius: 4px;
+        }
+        .card h2 { font-size: 0.8rem; color: #888; margin: 0 0 10px 0; text-transform: uppercase; }
+        .card .value { font-size: 2rem; font-weight: bold; color: #fff; }
+        .card.warning { border-color: #ff4444; }
+        .card.warning .value { color: #ff4444; }
+
+        button {
+            background: #1a1a1a;
+            color: #e0e0e0;
+            border: 1px solid #333;
+            padding: 8px 16px;
+            cursor: pointer;
+            font-family: monospace;
+            font-size: 0.9rem;
+            margin-right: 10px;
+            margin-bottom: 20px;
+        }
+        button:hover { background: #252525; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #1a1a1a;
+        }
+        th, td {
+            text-align: left;
+            padding: 10px 14px;
+            border-bottom: 1px solid #2a2a2a;
+            font-size: 0.85rem;
+        }
+        th { color: #888; font-weight: normal; text-transform: uppercase; }
+        .flag { color: #ff4444; }
+        .ok { color: #44ff88; }
+    </style>
+</head>
+<body>
+    <h1>System Health Monitor</h1>
+    <p class="subtitle">Tracks CPU, memory and disk usage. Flags anything above threshold.</p>
+
+    <div class="metrics">
+        <div class="card" id="cpu-card">
+            <h2>CPU</h2>
+            <div class="value" id="cpu-val">--</div>
+        </div>
+        <div class="card" id="mem-card">
+            <h2>Memory</h2>
+            <div class="value" id="mem-val">--</div>
+        </div>
+        <div class="card" id="disk-card">
+            <h2>Disk</h2>
+            <div class="value" id="disk-val">--</div>
+        </div>
+    </div>
+
+    <button onclick="refresh()">Refresh Metrics</button>
+    <button onclick="loadLogs()">View Log History</button>
+
+    <div id="log-table"></div>
+
+    <script>
+        async function refresh() {
+            const res = await fetch('/metrics');
+            const data = await res.json();
+
+            document.getElementById('cpu-val').textContent = data.cpu + '%';
+            document.getElementById('mem-val').textContent = data.memory + '%';
+            document.getElementById('disk-val').textContent = data.disk + '%';
+
+            document.getElementById('cpu-card').className = 'card' + (data.flagged.includes('CPU') ? ' warning' : '');
+            document.getElementById('mem-card').className = 'card' + (data.flagged.includes('Memory') ? ' warning' : '');
+            document.getElementById('disk-card').className = 'card' + (data.flagged.includes('Disk') ? ' warning' : '');
+        }
+
+        async function loadLogs() {
+            const res = await fetch('/logs');
+            const data = await res.json();
+
+            if (data.length === 0) {
+                document.getElementById('log-table').innerHTML = '<p style="color:#666">No logs yet.</p>';
+                return;
+            }
+
+            let rows = data.slice().reverse().map(entry => `
+                <tr>
+                    <td>${entry.timestamp}</td>
+                    <td>${entry.cpu}%</td>
+                    <td>${entry.memory}%</td>
+                    <td>${entry.disk}%</td>
+                    <td class="${entry.flagged.length > 0 ? 'flag' : 'ok'}">
+                        ${entry.flagged.length > 0 ? entry.flagged.join(', ') : 'OK'}
+                    </td>
+                </tr>
+            `).join('');
+
+            document.getElementById('log-table').innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>CPU</th>
+                            <th>Memory</th>
+                            <th>Disk</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                </table>
+            `;
+        }
+
+        // Auto refresh every 5 seconds
+        refresh();
+        setInterval(refresh, 5000);
+    </script>
+</body>
+</html>
